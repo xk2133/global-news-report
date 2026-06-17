@@ -1,0 +1,195 @@
+/* Global Top News Report — Full CSS Template */
+/* Copy this into the <style> tag of each report */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #f8f9fa;
+  color: #1a1a2e;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 20px;
+}
+
+/* Header */
+.header {
+  text-align: center;
+  margin-bottom: 40px;
+  padding-bottom: 24px;
+  border-bottom: 2px solid #e9ecef;
+}
+.header .date {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #868e96;
+  margin-bottom: 8px;
+}
+.header h1 {
+  font-size: 28px;
+  font-weight: 800;
+  color: #1a1a2e;
+  margin-bottom: 0;
+}
+
+/* Section */
+.section {
+  margin-bottom: 36px;
+}
+.section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+.section-label.finance { background: #fff3e0; color: #e65100; }
+.section-label.tech { background: #e3f2fd; color: #1565c0; }
+.section-label.politics { background: #fce4ec; color: #c62828; }
+.section-label.other { background: #f3e5f5; color: #7b1fa2; }
+
+/* News Card */
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  border-left: 4px solid #dee2e6;
+  transition: box-shadow 0.2s;
+}
+.card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.card.finance { border-left-color: #ff9800; }
+.card.tech { border-left-color: #2196f3; }
+.card.politics { border-left-color: #e91e63; }
+.card.other { border-left-color: #9c27b0; }
+
+.card .tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #adb5bd;
+  margin-bottom: 6px;
+}
+.card h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.card p {
+  font-size: 14px;
+  color: #495057;
+  line-height: 1.6;
+}
+.card .source {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #adb5bd;
+  font-style: italic;
+}
+.card .source a {
+  color: #868e96;
+  text-decoration: none;
+  border-bottom: 1px dashed #ced4da;
+  transition: color 0.2s, border-color 0.2s;
+}
+.card .source a:hover {
+  color: #1a1a2e;
+  border-bottom-color: #1a1a2e;
+}
+
+/* Market Table */
+.market-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.market-table th {
+  background: #1a1a2e;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 10px 16px;
+  text-align: left;
+  white-space: nowrap;
+}
+.market-table td {
+  padding: 10px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid #f1f3f5;
+  vertical-align: middle;
+}
+.market-table tr:last-child td { border-bottom: none; }
+.market-table .up { color: #d32f2f; font-weight: 600; }
+.market-table .down { color: #2e7d32; font-weight: 600; }
+.market-table .name { font-weight: 600; }
+
+/* Sparkline */
+.sparkline-cell {
+  width: 130px;
+  height: 36px;
+  padding: 4px 8px !important;
+}
+.sparkline-cell svg {
+  display: block;
+}
+
+/* Bullet highlights */
+.highlights {
+  list-style: none;
+  padding: 0;
+}
+.highlights li {
+  padding: 6px 0 6px 20px;
+  position: relative;
+  font-size: 14px;
+  color: #495057;
+  line-height: 1.6;
+}
+.highlights li::before {
+  content: '\2192';
+  position: absolute;
+  left: 0;
+  color: #adb5bd;
+  font-weight: 700;
+}
+
+/* Footer */
+.footer {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #e9ecef;
+  text-align: center;
+  font-size: 12px;
+  color: #adb5bd;
+}
+.footer a {
+  color: #868e96;
+  text-decoration: none;
+}
+.footer a:hover {
+  color: #495057;
+  text-decoration: underline;
+}
