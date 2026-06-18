@@ -23,7 +23,7 @@ Generate a polished, self-contained HTML report with market data tables and bili
 
 ## Step 1: Market Data — Wind MCP Only
 
-**CLI** from `C:\Users\kongxy12\.agents\skills\wind-mcp-skill\`:
+**CLI** from `C:\Users\kongxy12\.claude\skills\wind-mcp-skill\`:
 ```
 node scripts/cli.mjs call {server} {tool} '{JSON params}'
 ```
