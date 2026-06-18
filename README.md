@@ -43,7 +43,7 @@ Run manually or schedule as a daily automation (recommended: 08:30 CST, weekdays
 
 - [Wind MCP Skill](https://github.com/Wind-Information-Co-Ltd/wind-skills) — for market data
 - WebSearch — for news collection
-- No API keys, no Python scripts, no Finnhub/NewsAPI
+- No API keys, no Python scripts
 
 ## Version
 
