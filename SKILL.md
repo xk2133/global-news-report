@@ -4,11 +4,11 @@ description: >
   Generate a professional "Global Top News" HTML report covering Financial, Technology, Political, and Other Highlights.
   Triggers: "Global News Report", "top news", "daily news", "news report", "新闻报告".
   Designed for daily automation (08:30 CST) but can be triggered manually.
-version: 2.3.0
+version: 2.3.1
 agent_created: true
 ---
 
-# Global News Report Skill (v2.3)
+# Global News Report Skill (v2.3.1)
 
 Generate a polished, self-contained HTML report with market data tables and bilingual news cards.
 
@@ -88,16 +88,50 @@ Each indicator has `code`, `name`, `data[]` (same length as `date[]`, null = non
 
 **Don't use `count`** param — `economic_data` doesn't support it. Always pass `beginDate` + `endDate` (format: `yyyyMMdd`, no dashes).
 
-### 1D: YTD History / Sparkline Data
+### 1D: YTD Calculation — CRITICAL
 
-| Source | Indicators Covered | Date Range | Notes |
-|--------|-------------------|------------|-------|
-| `get_index_kline` (index_data) | DJI, SPX, IXIC | Jan 1 → today | **Full YTD**, begin_date=`20260101` |
-| `get_economic_data` (economic_data) | Gold, WTI, DXY, US 10Y | Jan 1 → today | **Full YTD**, single call with 4 codes |
+**⚠️ YTD % must be computed from the FIRST trading day of the year, NOT from any other reference point.**
 
-- **3 indices** → kline YTD range → complete data
-- **4 macro** → same `economic_data` call as Step 1C, already covers full YTD
-- **Mag 7 YTD**: calculate from year-start price fetched via `get_global_stock_price_indicators` + prevClose comparison against Jan 2
+#### YTD Formula (price/index indicators)
+
+```
+YTD% = (latest_value / first_trading_day_of_year_value - 1) × 100
+```
+
+Where:
+- `latest_value` = last non-null data point in the YTD series
+- `first_trading_day_of_year_value` = **first non-null data point** after stripping nulls from the YTD series (this is the earliest trading day the API returns for the year)
+
+#### YTD Formula (US 10Y yield — basis points)
+
+```
+YTD_bp = (latest_yield - first_trading_day_yield) × 100
+```
+Display as e.g. `+55bp` or `-12bp` (no % sign for yields).
+
+#### Per-source data for YTD
+
+| Source | Indicators | YTD Data | First Day | Latest |
+|--------|-----------|----------|-----------|--------|
+| `get_index_kline` (index_data) | DJI, SPX, IXIC | Full YTD bars | `bars[0]` close | `bars[-1]` close |
+| `get_economic_data` (economic_data) | Gold, WTI, DXY, US 10Y | Stripped non-null array — **first element IS the first trading day** | `data[0][1]` | `data[-1][1]` |
+| `get_global_stock_price_indicators` | Mag 7 | Compare latest vs Jan 2 close | Fetch separately or use prevClose chain | Latest close |
+
+#### Correct YTD sign conventions
+
+- **Red (`#d32f2f`, class `up`)**: YTD > 0 (price went UP)
+- **Green (`#2e7d32`, class `down`)**: YTD < 0 (price went DOWN)
+- For US 10Y yield: up = yields rose (bearish bonds), down = yields fell (bullish bonds)
+
+#### YTD Validation (DO NOT SKIP)
+
+After computing all 15 YTD values, run these sanity checks before generating HTML:
+
+1. **Gold YTD should be negative in 2026** (gold peaked ~$5,400 in Jan and has declined to ~$4,200-4,400 by mid-year)
+2. **DXY YTD should be +1% to +3%** (started ~98.3, currently ~99-101)
+3. **WTI YTD should be strongly positive** (started ~$57, currently ~$75-80, rally >30%)
+4. **US 10Y YTD should be +20 to +35bp** (started ~4.18%, currently ~4.4-4.5%)
+5. If any YTD value contradicts these ranges, **re-check your calculation before proceeding**
 
 ### 1E: Fallback — WebFetch (P1)
 
@@ -393,6 +427,7 @@ function switchTab(name) {
 - [ ] All 15 indicators via Wind MCP: 1A quote (4), 1B global_stock (7), 1C economic_data (4)
 - [ ] economic_data response parsed: filter by codes (M0000271/S0031645/S0180938/G0000891), forward-chronological
 - [ ] YTD sparkline data generated for all 15 indicators
+- [ ] **YTD % validated**: Gold YTD ≈ negative in 2026, WTI YTD ≈ strongly positive (+25% to +35%), DXY YTD ≈ +1% to +3%
 - [ ] Merged WebSearch for news (max 2 calls, gap fill if needed)
 - [ ] Section source rules enforced: Financial (T1≥2 + T1/T2 only), Tech (T1/T2/T3), Politics (T1 only), Other (T1/T2/T3); no banned sources
 - [ ] De-dup applied; all stories < 24h; each section has 1 lead story
