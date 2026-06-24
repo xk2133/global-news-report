@@ -3,12 +3,18 @@ name: global-news-report
 description: >
   Generate a professional "Global Top News" HTML report covering Financial, Technology, Political, and Other Highlights.
   Triggers: "Global News Report", "top news", "daily news", "news report", "新闻报告".
-  Designed for daily automation (08:30 CST) but can be triggered manually.
-version: 2.3.1
+  Can be triggered manually or via automation.
+
+## Environment Dependencies
+
+- **Required**: `Wind MCP Skill` installed and Wind terminal running (for market data)
+- **Optional fallback**: If Wind MCP unavailable, skip Step 1 and generate news-only report (Step 2 + Step 3)
+- **Path placeholder**: `{WIND_MCP_SKILL_DIR}` — replace with actual path to `wind-mcp-skill` directory (e.g., `C:\Users\<user>\.claude\skills\wind-mcp-skill` on Windows, or equivalent on Linux/macOS)
+version: 2.5.1
 agent_created: true
 ---
 
-# Global News Report Skill (v2.3.1)
+# Global News Report Skill (v2.5.1)
 
 Generate a polished, self-contained HTML report with market data tables and bilingual news cards.
 
@@ -23,29 +29,47 @@ Generate a polished, self-contained HTML report with market data tables and bili
 
 ## Step 1: Market Data — Wind MCP Only
 
-**CLI** from `C:\Users\kongxy12\.claude\skills\wind-mcp-skill\`:
+**CLI** from `{WIND_MCP_SKILL_DIR}`:
 ```
 node scripts/cli.mjs call {server} {tool} '{JSON params}'
 ```
-⚠️ Must use `spawnSync` in Node.js scripts (NOT `execSync`) to avoid Windows shell quote escaping.
+> ⚠️ Must use `spawnSync` in Node.js scripts (NOT `execSync`) to avoid shell quote escaping issues.
 
-### 1A: Indices + FX — `get_index_quote` (index_data)
+### [Windows-specific] Subprocess warnings
 
-Always available (24/7). Returns minute K-lines; extract last bar for daily close.
+These only apply on Windows (PowerShell / Git Bash / CMD):
 
-| # | Indicator | windcode | Extract from rows[] |
-|---|-----------|----------|---------------------|
-| 1 | Dow Jones | `DJI.GI` | `rows[-1][0]`=Close, `rows[-1][5]`=Date (`yyyyMMdd`) |
-| 2 | S&P 500 | `SPX.GI` | same |
-| 3 | Nasdaq | `IXIC.GI` | same |
-| 4 | USD/CNY | `USDCNY.IB` | same |
+- **spawnSync vs execSync**: `spawnSync` avoids shell escaping issues on Windows; `execSync` may misquote JSON params.
+- **Subprocess empty stdout**: Python `subprocess.run([node, cli.mjs, ...])` returns empty stdout on Windows even with correct cwd. Workaround: redirect CLI output to temp files via Bash (`node cli.mjs ... > /tmp/out.json`), then parse with Python. Direct pipe also works (`node cli.mjs ... | python -c ...`).
+- **Bash parallel redirect trap**: In Git Bash on Windows, `cmd & cmd2 &` + `>` redirect combos produce **0-byte files**. Always fetch Wind MCP data **serially** (no `&`). Each call must complete before the next.
+- **Windows /tmp vs Python tempdir**: Bash redirects to `/tmp/xxx.json`, but Python's `tempfile.gettempdir()` returns `C:\Users\…\AppData\Local\Temp`. Python parse scripts must use the Windows absolute path, NOT `/tmp`.
 
-> Note: quote returns MATCH (close), AVGPRICE, VOLUME, TURNOVER, TIME, _DATE columns.
-> Day change % requires Open from `rows[0][0]`: `(Close - Open) / Open * 100`.
+### [Linux/macOS] Alternative
+
+On Unix-like systems, `subprocess.run()` with `stdout=PIPE` typically works directly. Use `tempfile.gettempdir()` for cross-platform temp paths without manual `/tmp` references.
+
+### 1A: Indices + FX — `get_index_kline` (index_data)
+
+Get daily K-line from late Dec of prior year through today. Returns matrix with columns below.
+
+| # | Indicator | windcode | begin_date |
+|---|-----------|----------|------------|
+| 1 | Dow Jones | `DJI.GI` | `{YYYYMMDD}` (late Dec prior year) |
+| 2 | S&P 500 | `SPX.GI` | `{YYYYMMDD}` (late Dec prior year) |
+| 3 | Nasdaq | `IXIC.GI` | `{YYYYMMDD}` (late Dec prior year) |
+| 4 | USD/CNH (Offshore) | `USDCNH.FX` | `{YYYYMMDD}` (late Dec prior year) |
+
+> kline columns = TIME(0), OPEN(1), MATCH/close(2), HIGH(3), LOW(4), TURNOVER(5), VOLUME(6), _DATE(9).
+> Day Chg = `(rows[-1][2] - rows[-2][2]) / rows[-2][2] * 100` — (latest close - prev day close) / prev day close.
+> YTD = `(rows[-1][2] - yearEndClose) / yearEndClose * 100` — yearEndClose = close on Dec 31 of prior year; if Dec 31 is not a trading day, use the last trading day before it.
+> ⚠️ kline must span from late Dec of prior year to today, so both prev-day and year-end close are in the data.
+> ⚠️ **USD/CNH 口径**: 使用离岸人民币（Offshore CNH），非在岸人民币（CNY）。windcode = `USDCNH.FX`。
 
 ### 1B: Mag 7 Stocks — `get_global_stock_price_indicators` (global_stock_data)
 
 Always available. Returns PrevClose → exact daily change %.
+
+⚠️ **One stock per call** — `windcode` does NOT accept comma-separated values. Call 7 times serially.
 
 | # | Stock | windcode |
 |---|-------|----------|
@@ -58,6 +82,10 @@ Always available. Returns PrevClose → exact daily change %.
 |11 | Tesla | `TSLA.O` |
 
 Parse: `data.rows[0]` contains price, prevClose, change%, volume etc.
+- Day Chg = `(price - prevClose) / prevClose * 100` — already provided by Wind in `change%` field.
+- YTD = `(price - yearEndClose) / yearEndClose * 100` — yearEndClose = close on Dec 31 of prior year from `get_stock_kline`. If Dec 31 is not a trading day, use the **last trading day before Dec 31**.
+  - ⚠️ If no row with `_DATE=="{YYYYMMDD}"` (Dec 31) exists, use the **last row before Jan 1 of current year** as the year-end baseline.
+- YTD Sparkline = full kline `MATCH` column (Jan 2 of current year → today), also from `get_stock_kline`.
 
 ### 1C: Macro/Commodity (Gold, WTI, DXY, US 10Y) — `get_economic_data` (economic_data)
 
@@ -65,7 +93,9 @@ Parse: `data.rows[0]` contains price, prevClose, change%, volume etc.
 
 ```
 node scripts/cli.mjs call economic_data get_economic_data \
-  '{"metricIdsStr":"美元指数,伦敦现货黄金价格,NYMEX原油期货价格,美国国债收益率10年","freq":"日","beginDate":"20260101","endDate":"{TODAY}"}'
+  '{"metricIdsStr":"美元指数,伦敦黄金,NYMEX原油期货价格,美国国债收益率10年","freq":"日","beginDate":"{YYYYMM}01","endDate":"{TODAY}"}'
+# Example for 2026: beginDate="20251201"
+# ⚠️ Gold keyword = "伦敦黄金" NOT "伦敦现货黄金价格" — the latter returns service error
 ```
 
 **Response structure**: `content[0].text` → parse inner JSON → `data.date[]` + `data.indicatorInfo[]`.
@@ -85,43 +115,25 @@ Each indicator has `code`, `name`, `data[]` (same length as `date[]`, null = non
 - Filter `indicatorInfo` for the 4 codes above, match by `code` field
 - Strip nulls for trading-day-only series: `[(date[i], val) for i,val in enumerate(data) if val is not None]`
 - Latest value = last non-null entry; YTD history = full array
+- Day Chg = `(values[-1] - values[-2]) / values[-2] * 100` — latest vs immediately preceding non-null value
+  - **US 10Y exception**: display as basis points (bp): `(values[-1] - values[-2]) * 100` bp
+- YTD = `(values[-1] - yearEndVal) / yearEndVal * 100` — yearEndVal = value on Dec 31 of prior year; if non-trading day, use the last trading day before it
+  - **US 10Y exception**: display as basis points (bp): `(values[-1] - yearEndVal) * 100` bp
+- ⚠️ `beginDate` must reach back to early Dec of prior year (e.g. `"20251201"`) to capture year-end baseline
 
 **Don't use `count`** param — `economic_data` doesn't support it. Always pass `beginDate` + `endDate` (format: `yyyyMMdd`, no dashes).
 
 ### 1D: YTD Calculation — CRITICAL
 
-**⚠️ YTD % must be computed from the FIRST trading day of the year, NOT from any other reference point.**
+| Source | Indicators Covered | Date Range | Notes |
+|--------|-------------------|------------|-------|
+| `get_index_kline` (index_data) | DJI, SPX, IXIC, **USD/CNH** | late Dec prior year → today | **Full YTD**, begin_date late Dec prior year (includes year-end close + sparkline data) |
+| `get_economic_data` (economic_data) | Gold, WTI, DXY, US 10Y | early Dec prior year → today | **Full YTD**, beginDate early Dec prior year (includes year-end value) |
+| `get_stock_kline` (stock_data) | Mag 7 × 7 calls | late Dec prior year → today | **Full YTD**, begin_date late Dec prior year (covers year-end close + sparkline data) |
 
-#### YTD Formula (price/index indicators)
-
-```
-YTD% = (latest_value / first_trading_day_of_year_value - 1) × 100
-```
-
-Where:
-- `latest_value` = last non-null data point in the YTD series
-- `first_trading_day_of_year_value` = **first non-null data point** after stripping nulls from the YTD series (this is the earliest trading day the API returns for the year)
-
-#### YTD Formula (US 10Y yield — basis points)
-
-```
-YTD_bp = (latest_yield - first_trading_day_yield) × 100
-```
-Display as e.g. `+55bp` or `-12bp` (no % sign for yields).
-
-#### Per-source data for YTD
-
-| Source | Indicators | YTD Data | First Day | Latest |
-|--------|-----------|----------|-----------|--------|
-| `get_index_kline` (index_data) | DJI, SPX, IXIC | Full YTD bars | `bars[0]` close | `bars[-1]` close |
-| `get_economic_data` (economic_data) | Gold, WTI, DXY, US 10Y | Stripped non-null array — **first element IS the first trading day** | `data[0][1]` | `data[-1][1]` |
-| `get_global_stock_price_indicators` | Mag 7 | Compare latest vs Jan 2 close | Fetch separately or use prevClose chain | Latest close |
-
-#### Correct YTD sign conventions
-
-- **Red (`#d32f2f`, class `up`)**: YTD > 0 (price went UP)
-- **Green (`#2e7d32`, class `down`)**: YTD < 0 (price went DOWN)
-- For US 10Y yield: up = yields rose (bearish bonds), down = yields fell (bullish bonds)
+- **3 indices + USD/CNH** → single kline call each (late Dec prior year → today), covers both year-end close, prev-day close, and full sparkline
+- **4 macro** → same `economic_data` call as Step 1C (early Dec prior year → today), covers year-end value
+- **Mag 7**: 7 × `get_stock_kline` (late Dec prior year → today) covers year-end close + prev-day close + full YTD sparkline in one call per stock
 
 #### YTD Validation (DO NOT SKIP)
 
@@ -133,7 +145,38 @@ After computing all 15 YTD values, run these sanity checks before generating HTM
 4. **US 10Y YTD should be +20 to +35bp** (started ~4.18%, currently ~4.4-4.5%)
 5. If any YTD value contradicts these ranges, **re-check your calculation before proceeding**
 
-### 1E: Fallback — WebFetch (P1)
+### 1E: Unified Calculation Formulas
+
+**Day Change**: `(latest - prev) / prev × 100`
+**YTD Change**: `(latest - yearEndClose) / yearEndClose × 100`
+
+| Track | latest | prev | yearEndClose |
+|-------|--------|------|--------------|
+| **A — Index kline** | `rows[-1][2]` (MATCH/close) | `rows[-2][2]` (prev day close) | row with `_DATE` of Dec 31 prior year (or last trading day before it) |
+| **B — Stock price_indicators** | col[0] (最新成交价) | col[1] (前收盘价) | from `get_stock_kline`: row with `_DATE` of Dec 31 prior year (or last trading day before it) |
+| **C — Macro economic_data** | last non-null value | second-last non-null | value on date of Dec 31 prior year (or last trading day before it) |
+
+> ⚠️ All kline/macro queries must start from Dec of prior year to capture year-end baseline.
+> **US 10Y**: Day Chg and YTD displayed as basis points (bp) — `(latest - prev) × 100` and `(latest - yearEndVal) × 100`. Color: yield up = red, yield down = green (same as stock convention).
+
+**Financial Snapshot 展示顺序**（报告表格从左到右，8 列）：
+
+| # | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| 指标 | Dow Jones | S&P 500 | Nasdaq | **US 10Y Yield** | **DXY** | **USD/CNH (Offshore)** | Gold | WTI Crude |
+| 类别 | 指数 | 指数 | 指数 | **债券** | **汇率** | **汇率** | 商品 | 商品 |
+
+> 分组逻辑：股 → 债 → 汇 → 商。
+
+**口径注释**（表格下方脚注）：
+
+| 指标 | 脚注 |
+|------|------|
+| USD/CNH (Offshore) | 使用离岸人民币（Offshore CNH），非在岸人民币（CNY） |
+| Gold | 伦敦现货黄金，美元/盎司（USD/oz） |
+| WTI Crude | NYMEX 原油期货活跃合约结算价，美元/桶（USD/bbl） |
+
+### 1F: Fallback — WebFetch (P1)
 
 Only when Wind MCP returns AUTH_ERROR or NETWORK_ERROR. Fetch individual MarketWatch pages:
 
@@ -142,39 +185,39 @@ Only when Wind MCP returns AUTH_ERROR or NETWORK_ERROR. Fetch individual MarketW
 | DJIA | `marketwatch.com/investing/index/djia` |
 | S&P 500 | `marketwatch.com/investing/index/spx` |
 | Nasdaq | `marketwatch.com/investing/index/comp` |
+| DXY | `marketwatch.com/investing/index/dxy` |
+| USD/CNH (Offshore) | `marketwatch.com/investing/currency/usdcnh` |
 | Gold | `marketwatch.com/investing/future/gold` |
 | WTI | `marketwatch.com/investing/future/cl.1` |
-| DXY | `marketwatch.com/investing/index/dxy` |
 | US 10Y | `marketwatch.com/investing/bond/tmubmusd10y` |
-| USD/CNY | `marketwatch.com/investing/currency/usdcny` |
 | AAPL/MSFT/NVDA/etc | `marketwatch.com/investing/stock/{ticker}` |
 
 **DO NOT use yfinance, Python scripts, Finnhub API, NewsAPI, or TradingEconomics.** Report data = last US trading day close. Wind EDB daily close is authoritative. Real-time sources (TradingEconomics etc.) reflect intraday prices for a different as-of date — never use them as primary source.
 
 ---
 
-## Step 2: Collect News (WebSearch max 2 calls)
+## Step 2: Collect News (WebSearch ≤ 6 calls)
 
-### Call 1 — All 4 sections merged (`topic: "news"`)
+### Initial 4 calls — One per section (`topic: "news"`)
 
-Replace `{DATE}` with today's date:
+Replace `{DATE}` with today's date. Each call targets one section:
 
-| Group | Query |
-|-------|-------|
-| Financial | `"top financial markets stock economy news today {DATE}"` |
-| Technology | `"top technology AI chips funding IPO news today {DATE}"` |
-| Political | `"top political geopolitics trade diplomacy news today {DATE}"` |
-| Other | `"world sports crypto defense highlights news today {DATE}"` |
+| # | Section | Query |
+|---|---------|-------|
+| 1 | Financial | `"top financial markets stock economy news today {DATE}"` |
+| 2 | Technology | `"top technology AI chips funding IPO news today {DATE}"` |
+| 3 | Political | `"top political geopolitics trade diplomacy news today {DATE}"` |
+| 4 | Other | `"world sports crypto defense highlights news today {DATE}"` |
 
 Aim for 3-5 stories per section.
 
-### Call 2 — Gap Fill (only if section < 2 stories)
+### Gap-fill ≤ 2 calls (only if section < 2 stories after tier filtering)
 
-Targeted search for the deficient section.
+Targeted search for the deficient section. Only if the initial call for a section returns < 2 usable stories after applying source-tier filtering.
 
-### WebFetch Follow-ups (max 2 calls)
+### WebFetch follow-ups (max 2 calls)
 
-Fetch full text for **1 lead story per section** only. Others use search snippets.
+Fetch full text for **1 lead story** only (highest-priority, usually Financial or Political). Others use search snippets.
 
 ### News Filtering Rules
 
@@ -318,6 +361,11 @@ Use the following full HTML template. Replace all `{PLACEHOLDERS}` with generate
       <thead><tr><th>Index</th><th>Close</th><th>Day Chg</th><th>YTD</th><th>YTD Trend</th></tr></thead>
       <tbody>{FINANCE_ROWS}</tbody>
     </table>
+    <div style="font-size:11px;color:#adb5bd;margin:-8px 0 20px 16px;line-height:1.6;">
+      <span>USD/CNH: Offshore CNH (not onshore CNY)</span> &middot; 
+      <span>Gold: London spot, USD/oz</span> &middot; 
+      <span>WTI: NYMEX active contract, USD/bbl</span>
+    </div>
     {FINANCE_CARDS}
   </div>
 
@@ -344,7 +392,7 @@ Use the following full HTML template. Replace all `{PLACEHOLDERS}` with generate
   </div>
 
   <div class="footer">
-    Auto-generated by KK &middot; All sources in English &middot;
+    Auto-generated &middot; All sources in English &middot;
     <a href="https://apnews.com" target="_blank">AP News</a> &middot;
     <a href="https://www.cnbc.com" target="_blank">CNBC</a> &middot;
     <a href="https://www.marketwatch.com" target="_blank">MarketWatch</a> &middot;
@@ -424,11 +472,12 @@ function switchTab(name) {
 
 ## Quality Checklist
 
-- [ ] All 15 indicators via Wind MCP: 1A quote (4), 1B global_stock (7), 1C economic_data (4)
+- [ ] All 15 indicators via Wind MCP: 1A quote (4), 1B global_stock (7 × serial calls), 1C economic_data (4)
 - [ ] economic_data response parsed: filter by codes (M0000271/S0031645/S0180938/G0000891), forward-chronological
 - [ ] YTD sparkline data generated for all 15 indicators
 - [ ] **YTD % validated**: Gold YTD ≈ negative in 2026, WTI YTD ≈ strongly positive (+25% to +35%), DXY YTD ≈ +1% to +3%
-- [ ] Merged WebSearch for news (max 2 calls, gap fill if needed)
+- [ ] Wind MCP fetches done **serially** (no `&` + `>` parallel redirect; on Windows: use absolute temp paths, not `/tmp`)
+- [ ] Independent WebSearch per section (4 calls + ≤2 gap-fill = ≤6 total)
 - [ ] Section source rules enforced: Financial (T1≥2 + T1/T2 only), Tech (T1/T2/T3), Politics (T1 only), Other (T1/T2/T3); no banned sources
 - [ ] De-dup applied; all stories < 24h; each section has 1 lead story
 - [ ] Built-in template used (CSS/layout self-contained, no dependency on prior report)
@@ -441,10 +490,3 @@ function switchTab(name) {
 
 ---
 
-## Automation Integration
-
-When used as a daily automation:
-- **Schedule**: `FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=8;BYMINUTE=30` (CST)
-- **Prompt**: "Run the global-news-report skill to generate today's Global Top News report."
-- **File**: Written to workspace root as `Global News Report-YYYYMMDD.html`
-- **Data**: Wind MCP for all 15 indicators; WebSearch for news
