@@ -82,7 +82,7 @@ def pct_str(val):
 def day_str_macro(val):
     """Format day change for macro indicators."""
     sign = "+" if val > 0 else ""
-    return f"{sign}{val:.2f}"
+    return f"{sign}{val:.2f}%"
 
 
 def day_str_us10y(val):
@@ -134,6 +134,7 @@ def build_finance_rows(data):
             ytd_str = f'{m["ytd"]:+.2f}%'
             close_str = f'{m["close"]:,.4f}'
         else:
+            # Gold, WTI
             day_str = day_str_macro(m["day_chg"])
             ytd_str = f'{m["ytd"]:+.2f}%'
             close_str = f'{m["close"]:,.2f}'

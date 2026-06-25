@@ -29,7 +29,7 @@ from datetime import datetime
 # Indices: Dow, S&P 500, Nasdaq (hardcoded in INDICES)
 # Then macro in this order: US10Y, DXY, USDCNH, Gold, WTI
 EDB_CODES = {
-    "US10Y":  {"code": "G0000891", "name": "美国:国债收益率:10年", "unit": "%"},
+    "US10Y":  {"code": "G0000891", "name": "美国:国债收益率:10年", "unit": "%", "is_bp": True},
     "DXY":    {"code": "M0000271", "name": "美元指数", "unit": "pts"},
     "USDCNH": {"code": "G0002329", "name": "美元兑人民币", "unit": "CNY/USD"},
     "Gold":   {"code": "S0031645", "name": "现货价(伦敦市场):黄金:美元", "unit": "USD/oz"},
@@ -118,7 +118,11 @@ def find_year_end(values):
 
 
 def compute_metrics(values, year_end, is_bp=False):
-    """Day Chg%, YTD%, sparkline from (date, value) series."""
+    """Day Chg%, YTD%, sparkline from (date, value) series.
+    
+    is_bp: Day Chg & YTD both in basis points (for yields like US 10Y).
+    Default: Day Chg & YTD in % (latest - prev) / prev * 100.
+    """
     if len(values) < 2:
         return {"latest": None, "day_chg": None, "ytd": None, "sparkline": []}
     latest = values[-1][1]
