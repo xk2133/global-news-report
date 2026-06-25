@@ -51,18 +51,12 @@ scripts/
 @skill:global-news-report
 ```
 
-Run manually or schedule as a daily automation (recommended: 08:30 CST, weekdays).
-
 ## Output
 
 `Global News Report-YYYYMMDD.html` — ready to view in any browser.
 
 ## Dependencies
 
-- [Wind MCP Skill](https://github.com/Wind-Information-Co-Ltd/wind-skills) — for market data (Wind terminal must be running)
+- [Wind MCP Skill](https://github.com/Wind-Information-Co-Ltd/wind-skills) — for market data
 - WebSearch / WebFetch — for news collection
 - Python 3.11+ — for scripts (generate_fetch.py, compute_market.py, generate_html.py)
-
-## Version
-
-v3.2.0 — HTML generation scripted (generate_html.py); SKILL.md精简 to 110 lines; references/news-filtering.md 只保留过滤规则; 市场数据表顺序改为股债汇商。
